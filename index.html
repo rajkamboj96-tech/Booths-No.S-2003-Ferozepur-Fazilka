@@ -1,0 +1,175 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>B.L.O. Data Viewer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 30px;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+        .header-container {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h2 { margin-top: 0; color: #2c3e50; }
+        select {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            width: 300px;
+            max-width: 100%;
+        }
+        .controls {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        .table-wrapper {
+            overflow-x: auto;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        table { border-collapse: collapse; width: 100%; }
+        th, td {
+            border: 1px solid #e0e0e0;
+            padding: 10px 15px;
+            text-align: left;
+            white-space: nowrap;
+        }
+        th {
+            background-color: #27ae60;
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        tr:hover { background-color: #e8f4f8; }
+        .status-message {
+            text-align: center;
+            padding: 40px;
+            font-size: 18px;
+            color: #7f8c8d;
+        }
+        .error { color: #e74c3c; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="header-container">
+        <h2>📊 B.L.O. List Viewer</h2>
+        
+        <div id="controls" class="controls" style="display: none;">
+            <label for="sheetSelect" style="font-size: 16px;"><strong>Select Area / Sheet: </strong></label>
+            <select id="sheetSelect">
+                <option value="">-- Select Sheet --</option>
+            </select>
+        </div>
+    </div>
+
+    <div id="tableContainer" class="table-wrapper">
+        <div id="loadingStatus" class="status-message">⏳ Loading Excel Data automatically... Please wait.</div>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        // Make sure your Excel file uploaded to GitHub is named exactly this:
+        const EXCEL_FILE_URL = './data.xlsx'; 
+        // ---------------------
+
+        const sheetSelect = document.getElementById('sheetSelect');
+        const tableContainer = document.getElementById('tableContainer');
+        const controls = document.getElementById('controls');
+        const loadingStatus = document.getElementById('loadingStatus');
+        
+        let excelData = {};
+
+        // Fetch the Excel file automatically when the page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            fetch(EXCEL_FILE_URL)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("Could not find data.xlsx. Did you upload it to GitHub and name it correctly?");
+                    }
+                    return response.arrayBuffer(); // Get file as raw binary data
+                })
+                .then(data => {
+                    // Read the workbook using SheetJS
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const sheetNames = workbook.SheetNames;
+
+                    sheetNames.forEach(sheetName => {
+                        const worksheet = workbook.Sheets[sheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""});
+                        
+                        if (jsonData.length > 0) {
+                            excelData[sheetName] = jsonData;
+                            
+                            // Add to dropdown
+                            const option = document.createElement('option');
+                            option.value = sheetName;
+                            option.textContent = sheetName;
+                            sheetSelect.appendChild(option);
+                        }
+                    });
+
+                    // Update UI
+                    loadingStatus.style.display = 'none';
+                    controls.style.display = 'block';
+                    tableContainer.innerHTML = '<div class="status-message">✅ Data loaded! Please select a sheet from the dropdown above.</div>';
+                })
+                .catch(error => {
+                    console.error("Error loading Excel file:", error);
+                    loadingStatus.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+                });
+        });
+
+        // Dropdown change listener
+        sheetSelect.addEventListener('change', function() {
+            const selectedSheet = this.value;
+            if (selectedSheet && excelData[selectedSheet]) {
+                renderTable(excelData[selectedSheet]);
+            } else {
+                tableContainer.innerHTML = '<div class="status-message">Please select a sheet to view data.</div>';
+            }
+        });
+
+        // Render HTML table
+        function renderTable(data) {
+            if (!data || data.length === 0) return;
+            
+            let html = '<table><thead><tr>';
+            const headers = data[0]; 
+            
+            headers.forEach(header => { html += `<th>${header || "Column"}</th>`; });
+            html += '</tr></thead><tbody>';
+            
+            for (let i = 1; i < data.length; i++) {
+                if (data[i].length === 0 || data[i].every(cell => cell === "")) continue;
+
+                html += '<tr>';
+                for(let j = 0; j < headers.length; j++) {
+                    let cellData = data[i][j] !== undefined ? data[i][j] : "";
+                    html += `<td>${cellData}</td>`;
+                }
+                html += '</tr>';
+            }
+            
+            html += '</tbody></table>';
+            tableContainer.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
